@@ -62,7 +62,12 @@ export default async function RootLayout({
     : DEFAULT_THEME;
 
   return (
-    <html lang="en" data-theme={initialTheme} data-gaia-theme={initialTheme}>
+    <html
+      lang="en"
+      data-theme={initialTheme}
+      data-gaia-theme={initialTheme}
+      suppressHydrationWarning
+    >
       <body className="overflow-x-hidden">
         <DesignProvider>
           <AuthHydrator />

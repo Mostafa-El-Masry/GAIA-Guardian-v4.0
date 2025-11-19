@@ -19,3 +19,29 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(req: Request) {
+  const supabase = supabaseAdmin();
+  const { searchParams } = new URL(req.url);
+  const taskId = searchParams.get("task_id");
+  const date = searchParams.get("date");
+  if (!taskId || !date) {
+    return NextResponse.json({ error: "Missing task_id or date" }, { status: 400 });
+  }
+  const { data: task, error: terr } = await supabase
+    .from("tasks")
+    .select("id,user_id")
+    .eq("id", taskId)
+    .single();
+  if (terr) return NextResponse.json({ error: terr.message }, { status: 500 });
+  if (!task || task.user_id !== USER_ID) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const { error } = await supabase
+    .from("task_day_status")
+    .delete()
+    .eq("task_id", taskId)
+    .eq("date", date);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

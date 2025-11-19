@@ -19,6 +19,7 @@ type Props = {
   task: Task | null;
   state: SlotState;
   completedTitle?: string;
+  today: string;
   onDone: (c: Category) => void;
   onSkip: (c: Category) => void;
   onQuickAdd: (
@@ -46,6 +47,7 @@ export default function TodoSlot(props: Props) {
     task,
     state,
     completedTitle,
+    today,
     onDone,
     onSkip,
     onQuickAdd,
@@ -54,6 +56,10 @@ export default function TodoSlot(props: Props) {
   } = props;
   const [showAdd, setShowAdd] = useState(false);
   const catStyle = useMemo(() => styleForCategory(category), [category]);
+  const dueLabel = task?.due_date ?? "Unscheduled";
+  const relativeLabel = describeRelativeDay(task?.due_date, today);
+  const actionBtn =
+    "flex-1 rounded-lg border border-[var(--gaia-border)] bg-[var(--gaia-contrast-bg)] px-3 py-2 font-semibold text-[var(--gaia-contrast-text)] transition-opacity hover:opacity-90";
 
   return (
     <div
@@ -66,7 +72,10 @@ export default function TodoSlot(props: Props) {
             {labelOf(category)}
           </span>
           <span className="rounded-md bg-[var(--gaia-border)] px-2 py-1 text-xs font-medium text-[var(--gaia-text-muted)]">
-            Today
+            {relativeLabel}
+          </span>
+          <span className="text-xs font-medium text-[var(--gaia-text-muted)]">
+            {dueLabel}
           </span>
         </div>
       </div>
@@ -89,21 +98,21 @@ export default function TodoSlot(props: Props) {
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <button
-                className="rounded-lg border border-[var(--gaia-negative-border)] bg-[var(--gaia-negative-bg)] px-3 py-2 font-semibold text-[var(--gaia-negative)] transition-colors hover:bg-[var(--gaia-negative)] hover:text-white"
+                className={actionBtn}
                 onClick={() => onDelete(task.id)}
                 title="Delete task"
               >
                 <Trash2 size={18} />
               </button>
               <button
-                className="flex-1 rounded-lg border border-[var(--gaia-warning-border)] bg-[var(--gaia-warning-bg)] px-3 py-2 font-semibold text-[var(--gaia-warning)] transition-colors hover:bg-[var(--gaia-warning)] hover:text-[#000]"
+                className={actionBtn}
                 onClick={() => onSkip(category)}
                 title="Skip this task"
               >
                 <SkipForward size={18} className="mx-auto" />
               </button>
               <button
-                className="flex-1 rounded-lg border border-[var(--gaia-positive-border)] bg-[var(--gaia-positive-bg)] px-3 py-2 font-semibold text-[var(--gaia-positive)] transition-colors hover:bg-[var(--gaia-positive)] hover:text-white"
+                className={actionBtn}
                 onClick={() => onDone(category)}
                 title="Mark as done"
               >
@@ -154,6 +163,25 @@ function labelOf(c: Category) {
   if (c === "life") return "Life";
   if (c === "work") return "Work";
   return "Distraction";
+}
+
+function describeRelativeDay(dateStr: string | null | undefined, todayStr: string) {
+  const target = dateStr ?? todayStr;
+  const parse = (value: string) => {
+    const [y, m, d] = value.split("-").map(Number);
+    return Date.UTC(y, (m ?? 1) - 1, d ?? 1);
+  };
+  const todayMs = parse(todayStr);
+  const targetMs = parse(target);
+  const diff = Math.round((targetMs - todayMs) / 86400000);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+  if (diff === -1) return "Yesterday";
+  if (diff >= 2 && diff <= 6) return `In ${diff} days`;
+  if (diff >= 7 && diff <= 13) return "Next week";
+  if (diff <= -2 && diff >= -6) return `${Math.abs(diff)} days ago`;
+  if (diff <= -7 && diff >= -13) return "Last week";
+  return target;
 }
 
 function categoryIcon(c: Category) {

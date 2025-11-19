@@ -3,6 +3,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { shiftDate } from "@/utils/dates";
+import {
+  readJSON,
+  writeJSON,
+  subscribe,
+  waitForUserStorage,
+} from "@/lib/user-storage";
 
 export type Category = "life" | "work" | "distraction";
 
@@ -20,7 +26,7 @@ export interface Task {
   note?: string;
   priority: 1 | 2 | 3;
   pinned: boolean;
-  due_date?: string; // YYYY-MM-DD
+  due_date?: string | null; // YYYY-MM-DD
   repeat: RepeatRule;
   created_at: string; // ISO
   updated_at: string; // ISO
@@ -35,21 +41,9 @@ export interface DailySelection {
 type StorageShape = { tasks: Task[] };
 
 const STORAGE_KEY = "gaia.todo.v2.0.6";
+const SUPABASE_SYNC_KEY = "gaia.todo.supabase.synced";
 const SELECTION_PREFIX = "gaia.todo.v2.0.6.selection.";
 const KUWAIT_TZ = "Asia/Kuwait";
-const normalizeTitle = (title?: string) => (title ?? "").trim().toLowerCase();
-function dedupeTasksByTitle(tasks: Task[]): Task[] {
-  const seen = new Set<string>();
-  const out: Task[] = [];
-  for (const t of tasks) {
-    const key = `${t.category}|${normalizeTitle(t.title)}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(t);
-  }
-  return out;
-}
-
 function safeNowISO() { return new Date().toISOString(); }
 function uuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return (crypto as any).randomUUID();
@@ -80,30 +74,26 @@ function matchesRepeat(rule: RepeatRule, dateStr: string, tz: string = KUWAIT_TZ
   return false;
 }
 function loadStorage(): StorageShape {
-  if (typeof window === "undefined") return { tasks: [] };
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { tasks: [] };
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed.tasks)) return { tasks: [] };
-    return { tasks: dedupeTasksByTitle(parsed.tasks) };
-  } catch { return { tasks: [] }; }
+  const stored = readJSON<StorageShape>(STORAGE_KEY, { tasks: [] });
+  const tasks = Array.isArray(stored.tasks) ? stored.tasks : [];
+  return { tasks: tasks.slice() };
 }
 function saveStorage(data: StorageShape) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  writeJSON(STORAGE_KEY, data);
 }
 function loadSelection(date: string): DailySelection {
-  if (typeof window === "undefined") return { date, selected: {} };
-  const raw = window.localStorage.getItem(SELECTION_PREFIX + date);
-  if (!raw) return { date, selected: {} };
-  try { return JSON.parse(raw) as DailySelection; } catch { return { date, selected: {} }; }
+  const fallback: DailySelection = { date, selected: {} };
+  const stored = readJSON<DailySelection>(SELECTION_PREFIX + date, fallback);
+  const selected =
+    stored && typeof stored === "object" && stored.selected
+      ? stored.selected
+      : {};
+  return { date, selected };
 }
 function saveSelection(sel: DailySelection) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(SELECTION_PREFIX + sel.date, JSON.stringify(sel));
+  writeJSON(SELECTION_PREFIX + sel.date, sel);
 }
-function compareDates(a?: string, b?: string): number {
+function compareDates(a?: string | null, b?: string | null): number {
   if (!a && !b) return 0;
   if (!a) return 1;
   if (!b) return -1;
@@ -143,8 +133,39 @@ export function useTodoDaily() {
   const [today, setToday] = useState<string>(() => getTodayInTZ(KUWAIT_TZ));
   const [storage, setStorage] = useState<StorageShape>(() => loadStorage());
   const [selection, setSelection] = useState<DailySelection>(() => loadSelection(getTodayInTZ(KUWAIT_TZ)));
-  const tasks = useMemo(() => dedupeTasksByTitle(storage.tasks), [storage.tasks]);
+  const tasks = useMemo(() => storage.tasks.slice(), [storage.tasks]);
   const autoAdvanceRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrateFromUserStorage() {
+      await waitForUserStorage();
+      if (cancelled) return;
+      const current = getTodayInTZ(KUWAIT_TZ);
+      setToday(current);
+      setStorage(loadStorage());
+      setSelection(loadSelection(current));
+    }
+    void hydrateFromUserStorage();
+    const unsubscribe = subscribe(({ key }) => {
+      if (!key) return;
+      if (key === STORAGE_KEY) {
+        setStorage(loadStorage());
+        return;
+      }
+      if (key.startsWith(SELECTION_PREFIX)) {
+        setSelection((prev) => {
+          const targetDate = key.slice(SELECTION_PREFIX.length);
+          if (!targetDate || targetDate !== prev.date) return prev;
+          return loadSelection(targetDate);
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   // DB hydrate on mount
   useEffect(() => {
@@ -174,15 +195,17 @@ export function useTodoDaily() {
           const task = byId[s.task_id];
           if (task) task.status_by_date[s.date] = s.status;
         }
-        const merged = dedupeTasksByTitle(Object.values(byId));
+        const merged = Object.values(byId);
         setStorage(prev => {
           const next = { ...prev, tasks: merged };
           saveStorage(next);
           return next;
         });
+        writeJSON(SUPABASE_SYNC_KEY, "true");
       } catch (e) {
         // If API fails, remain local-only.
         console.warn("TODO DB hydrate failed; staying local-first.", e);
+        writeJSON(SUPABASE_SYNC_KEY, "false");
       }
     })();
 
@@ -249,8 +272,10 @@ export function useTodoDaily() {
   }, [candidatesByCat, selection, completedByCat]);
 
   const refresh = useCallback(()=>{
+    const current = getTodayInTZ(KUWAIT_TZ);
+    setToday(current);
     setStorage(loadStorage());
-    setSelection(loadSelection(getTodayInTZ(KUWAIT_TZ)));
+    setSelection(loadSelection(current));
   }, []);
 
   const replaceTask = useCallback((t: Task) => {
@@ -264,21 +289,6 @@ export function useTodoDaily() {
   }, []);
 
   const addQuickTask = useCallback(async (category: Category, title: string, note?: string, priority: 1|2|3 = 2, pinned=false) => {
-    const normalizedTitle = normalizeTitle(title);
-    const duplicate = storage.tasks.find(
-      (t) => t.category === category && normalizeTitle(t.title) === normalizedTitle
-    );
-    if (duplicate) {
-      setSelection((prev) => {
-        const s: DailySelection = {
-          date: prev.date,
-          selected: { ...prev.selected, [category]: duplicate.id },
-        };
-        saveSelection(s);
-        return s;
-      });
-      return;
-    }
     const today = getTodayInTZ(KUWAIT_TZ);
     // find the next date (starting tomorrow) that has no task for this category
     let targetDate = shiftDate(today, 1);
@@ -341,8 +351,10 @@ export function useTodoDaily() {
         created_at: res.task.created_at,
         updated_at: res.task.updated_at,
       });
+      writeJSON(SUPABASE_SYNC_KEY, "true");
     } catch (e) {
       console.warn("DB insert failed; staying local.", e);
+      writeJSON(SUPABASE_SYNC_KEY, "false");
     }
   }, [replaceTask, storage.tasks]);
 
@@ -376,30 +388,60 @@ export function useTodoDaily() {
 
   const editTask = useCallback(async (taskId: string, patch: Partial<Pick<Task,"title"|"note"|"priority"|"pinned"|"due_date"|"repeat">>) => {
     // optimistic local mutate
-    let blocked = false;
     setStorage(prev => {
       const idx = prev.tasks.findIndex(t => t.id === taskId);
       if (idx === -1) return prev;
-      // prevent renaming into an existing title in the same category
-      if (patch.title) {
-        const normalized = normalizeTitle(patch.title);
-        const cat = prev.tasks[idx].category;
-        const dup = prev.tasks.some(
-          (t, i) => i !== idx && t.category === cat && normalizeTitle(t.title) === normalized
-        );
-        if (dup) {
-          blocked = true;
-          return prev;
-        }
-      }
       const tasks = prev.tasks.slice();
       tasks[idx] = { ...tasks[idx], ...patch, updated_at: safeNowISO() };
       const next = { ...prev, tasks }; saveStorage(next); return next;
     });
-    if (blocked) return;
-    try { await api(`/api/todo?id=${encodeURIComponent(taskId)}`, { method:"PATCH", body: JSON.stringify(patch) }); }
-    catch(e){ console.warn("DB patch failed", e); }
+    try { await api(`/api/todo?id=${encodeURIComponent(taskId)}`, { method:"PATCH", body: JSON.stringify(patch) }); writeJSON(SUPABASE_SYNC_KEY, "true"); }
+    catch(e){ console.warn("DB patch failed", e); writeJSON(SUPABASE_SYNC_KEY, "false"); }
   }, []);
+
+  const setTaskStatus = useCallback(
+    async (
+      taskId: string,
+      date: string,
+      nextStatus: "done" | "skipped" | "pending"
+    ) => {
+      setStorage((prev) => {
+        const idx = prev.tasks.findIndex((t) => t.id === taskId);
+        if (idx === -1) return prev;
+        const tasks = prev.tasks.slice();
+        const statuses = { ...(tasks[idx].status_by_date || {}) };
+        if (nextStatus === "pending") {
+          delete statuses[date];
+        } else {
+          statuses[date] = nextStatus;
+        }
+        tasks[idx] = {
+          ...tasks[idx],
+          status_by_date: statuses,
+          updated_at: safeNowISO(),
+        };
+        const next = { ...prev, tasks };
+        saveStorage(next);
+        return next;
+      });
+      try {
+        if (nextStatus === "pending") {
+          const qs = new URLSearchParams({ task_id: taskId, date });
+          await api(`/api/todo/status?${qs.toString()}`, { method: "DELETE" });
+        } else {
+          await api("/api/todo/status", {
+            method: "POST",
+            body: JSON.stringify({ task_id: taskId, date, status: nextStatus }),
+          });
+        }
+        writeJSON(SUPABASE_SYNC_KEY, "true");
+      } catch (e) {
+        console.warn("DB status update failed", e);
+        writeJSON(SUPABASE_SYNC_KEY, "false");
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const cats: Category[] = ["life", "work", "distraction"];
@@ -429,5 +471,6 @@ export function useTodoDaily() {
     showNext,
     deleteTask,
     editTask,
+    setTaskStatus,
   };
 }

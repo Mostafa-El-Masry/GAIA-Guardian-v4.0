@@ -1,13 +1,19 @@
-// app/Dashboard/components/TodoDaily.tsx
+﻿// app/Dashboard/components/TodoDaily.tsx
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTodoDaily } from "../hooks/useTodoDaily";
+import {
+  snapshotStorage,
+  waitForUserStorage,
+  subscribe,
+} from "@/lib/user-storage";
 import type { Category } from "../hooks/useTodoDaily";
 import TodoSlot from "./TodoSlot";
 
 export default function TodoDaily() {
+  const [storageStatus, setStorageStatus] = useState({ synced: false, hasTasks: false });
   const {
     today,
     slotInfo,
@@ -18,15 +24,47 @@ export default function TodoDaily() {
     editTask,
   } = useTodoDaily();
 
+  useEffect(() => {
+    let cancelled = false;
+    const update = () => {
+      const snapshot = snapshotStorage();
+      const hasSupabase = snapshot["gaia.todo.supabase.synced"] === "true";
+      const localRaw = snapshot["gaia.todo.v2.0.6"];
+      const hasTasks =
+        typeof localRaw === "string" && !localRaw.includes('"tasks":[]');
+      if (!cancelled) setStorageStatus({ synced: hasSupabase, hasTasks });
+    };
+    (async () => {
+      try {
+        await waitForUserStorage();
+        if (cancelled) return;
+        update();
+      } catch {
+        if (!cancelled) setStorageStatus({ synced: false, hasTasks: false });
+      }
+    })();
+    const unsub = subscribe(({ key }) => {
+      if (!key) return;
+      if (key.startsWith("gaia.todo")) update();
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
+
   const [quickCategory, setQuickCategory] = useState<Category>("life");
   const [quickTitle, setQuickTitle] = useState("");
 
   return (
     <section className="rounded-2xl border border-[var(--gaia-border)] bg-[var(--gaia-surface-soft)] p-6 shadow-lg">
       <header className="mb-6 flex items-center justify-between border-b border-[var(--gaia-border)] pb-4">
-        <div>
+        <div className="flex flex-col gap-1">
           <p className="text-sm text-[var(--gaia-text-muted)]">
-            {today} · Asia/Kuwait
+            {formatShortDate(today)} · Asia/Kuwait
+          </p>
+          <p className="text-xs text-[var(--gaia-text-muted)]">
+            {storageStatus.synced ? "Synced with Supabase" : "Local only"} · {storageStatus.hasTasks ? "Backed up" : "No cloud copy"}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2 text-right">
@@ -87,6 +125,7 @@ export default function TodoDaily() {
           onQuickAdd={addQuickTask}
           onDelete={deleteTask}
           onEdit={editTask}
+          today={today}
         />
         <TodoSlot
           category="work"
@@ -98,6 +137,7 @@ export default function TodoDaily() {
           onQuickAdd={addQuickTask}
           onDelete={deleteTask}
           onEdit={editTask}
+          today={today}
         />
         <TodoSlot
           category="distraction"
@@ -109,6 +149,7 @@ export default function TodoDaily() {
           onQuickAdd={addQuickTask}
           onDelete={deleteTask}
           onEdit={editTask}
+          today={today}
         />
       </div>
     </section>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, startTransition } from "react";
 
 import LogoutButton from "./LogoutButton";
 import { useAuthSnapshot } from "@/lib/auth-client";
@@ -93,23 +93,29 @@ export default function AppBar() {
   }, [pathname]);
 
   useEffect(() => {
+    let cancelled = false;
     setMounted(true);
 
-    // Load saved profiles
     const loadProfiles = async () => {
       try {
         await waitForUserStorage();
+        if (cancelled) return;
         const raw = getItem("gaia.saved-profiles");
-        if (raw) {
-          const profiles = JSON.parse(raw);
-          setSavedProfiles(profiles);
-        }
+        if (!raw) return;
+        const profiles = JSON.parse(raw);
+        if (cancelled) return;
+        startTransition(() => {
+          if (!cancelled) setSavedProfiles(profiles);
+        });
       } catch {
         // Ignore errors loading profiles
       }
     };
 
     loadProfiles();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!mounted || pathname === "/" || pathname.startsWith("/auth")) return null;
