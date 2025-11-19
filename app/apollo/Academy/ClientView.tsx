@@ -52,7 +52,7 @@ type StudyEngineRow = {
 };
 
 const CLASS_ID = "web-awakening-line-01";
-const CLASS_NAME = "Web Awakening · From Zero to Web Crafter";
+const CLASS_NAME = "Web Awakening - From Zero to Web Crafter";
 const STUDY_ENGINE_VERSION = "1.0.0";
 const TOTAL_PLANNED_DAYS = 200;
 const LOCAL_STORAGE_KEY = "gaia:web-awakening:study-engine";
@@ -67,8 +67,8 @@ const arcs: ArcConfig[] = [
     title: "Grounding",
     focus:
       "Tools + HTML + very basic CSS. Understanding what the web is and how pages are built from the ground up.",
-    estimatedDuration: "4–6 weeks",
-    approxLessons: "20–25 lessons",
+    estimatedDuration: "4-6 weeks",
+    approxLessons: "20-25 lessons",
   },
   {
     id: "arc-2-layout-style",
@@ -76,8 +76,8 @@ const arcs: ArcConfig[] = [
     title: "Layout & Style",
     focus:
       "Layout systems, CSS, and responsive design. Making pages actually look good and adapt to different screens.",
-    estimatedDuration: "4–6 weeks",
-    approxLessons: "20–25 lessons",
+    estimatedDuration: "4-6 weeks",
+    approxLessons: "20-25 lessons",
   },
   {
     id: "arc-3-movement",
@@ -85,8 +85,8 @@ const arcs: ArcConfig[] = [
     title: "Movement",
     focus:
       "JavaScript basics plus DOM manipulation. Turning static pages into interactive experiences.",
-    estimatedDuration: "6–8 weeks",
-    approxLessons: "25–30 lessons",
+    estimatedDuration: "6-8 weeks",
+    approxLessons: "25-30 lessons",
   },
   {
     id: "arc-4-components",
@@ -94,8 +94,8 @@ const arcs: ArcConfig[] = [
     title: "Components",
     focus:
       "React core: components, props, state, and simple hooks. Thinking in reusable, composable pieces.",
-    estimatedDuration: "8–10 weeks",
-    approxLessons: "30–35 lessons",
+    estimatedDuration: "8-10 weeks",
+    approxLessons: "30-35 lessons",
   },
   {
     id: "arc-5-apps",
@@ -103,24 +103,26 @@ const arcs: ArcConfig[] = [
     title: "Apps",
     focus:
       "From components to small apps: multi-section React apps with basic navigation and state flow.",
-    estimatedDuration: "10–12 weeks",
-    approxLessons: "35–40 lessons",
+    estimatedDuration: "10-12 weeks",
+    approxLessons: "35-40 lessons",
   },
   {
     id: "arc-6-craft",
     label: "Craft",
+    title: "Craft",
     focus:
       "Design, UX, accessibility, and performance. Making your projects feel professional and pleasant to use.",
-    estimatedDuration: "8–10 weeks",
-    approxLessons: "25–30 lessons",
+    estimatedDuration: "8-10 weeks",
+    approxLessons: "25-30 lessons",
   },
   {
     id: "arc-7-systems",
     label: "Systems",
+    title: "Systems",
     focus:
       "Full-stack basics and architecture: backend, database, auth, and structuring bigger apps.",
-    estimatedDuration: "12–16 weeks (ongoing)",
-    approxLessons: "30–40 lessons",
+    estimatedDuration: "12-16 weeks (ongoing)",
+    approxLessons: "30-40 lessons",
   },
 ];
 
@@ -180,9 +182,9 @@ function getDailyMessage(options: {
   } = options;
 
   const baseIntro =
-    "Mustafa, welcome back to Web Awakening · From Zero to Web Crafter.";
+    "Mustafa, welcome back to Web Awakening - From Zero to Web Crafter.";
   const dayLine = `You are currently at Study Day ${currentDayIndex} of about ${TOTAL_PLANNED_DAYS} planned days for this class.`;
-  const arcLine = `Today's Study Day lives in ${arcLabel} – ${arcTitle}.`;
+  const arcLine = `Today's Study Day lives in ${arcLabel} - ${arcTitle}.`;
 
   const parts: string[] = [baseIntro, dayLine, arcLine];
 
@@ -229,7 +231,7 @@ function getDailyMessage(options: {
   }
 
   parts.push(
-    "Recommendation for today: complete one Study Day with full attention. Anything extra you do – catching up backlog or working ahead – is a bonus, not an obligation."
+    "Recommendation for today: complete one Study Day with full attention. Anything extra you do - catching up backlog or working ahead - is a bonus, not an obligation."
   );
 
   return parts.join(" ");
@@ -259,7 +261,7 @@ create table if not exists study_engine_states (
 `;
 
 export default function ClientView() {
-  const [currentDayIndex, setCurrentDayIndex] = useState(1); // 1–200
+  const [currentDayIndex, setCurrentDayIndex] = useState(1); // 1-200
   const [completedDays, setCompletedDays] = useState(0);
   const [backlogDays, setBacklogDays] = useState(0);
   const [aheadDays, setAheadDays] = useState(0);
@@ -306,13 +308,11 @@ export default function ClientView() {
   }, []);
 
   const remainingDays = Math.max(TOTAL_PLANNED_DAYS - completedDays, 0);
-  const progressPercent =
-    TOTAL_PLANNED_DAYS === 0
-      ? 0
-      : Math.min(
-          100,
-          Math.max(0, (completedDays / TOTAL_PLANNED_DAYS) * 100)
-        );
+  const safeTotal = TOTAL_PLANNED_DAYS || 1;
+  const progressPercent = Math.min(
+    100,
+    Math.max(0, (completedDays / safeTotal) * 100)
+  );
 
   const todayArcInfo = getArcForDayIndex(currentDayIndex);
   const dailyMessage = getDailyMessage({
@@ -417,7 +417,7 @@ export default function ClientView() {
       <div className="mx-auto max-w-6xl space-y-8 px-4 py-10 sm:py-12">
         <header className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] gaia-muted">
-            Apollo · Academy · Learning Class
+            Apollo - Academy - Learning Class
           </p>
           <h1 className="text-3xl sm:text-4xl font-semibold gaia-strong">
             {CLASS_NAME}
@@ -444,13 +444,13 @@ export default function ClientView() {
               <span className="gaia-muted">
                 Estimated journey:{" "}
                 <span className="font-medium gaia-strong">
-                  ~18–24 months
+                  ~18-24 months
                 </span>
               </span>
               <span className="gaia-muted">
                 Planned lessons:{" "}
                 <span className="font-medium gaia-strong">
-                  ~185–225 (approx.)
+                  ~185-225 (approx.)
                 </span>
               </span>
             </div>
@@ -477,13 +477,13 @@ export default function ClientView() {
                   <span className="gaia-chip inline-flex items-center gap-1 rounded-full px-2 py-1">
                     <span className="font-medium">Duration</span>
                     <span className="gaia-muted">
-                      · {arc.estimatedDuration}
+                      - {arc.estimatedDuration}
                     </span>
                   </span>
                   <span className="gaia-chip inline-flex items-center gap-1 rounded-full px-2 py-1">
                     <span className="font-medium">Lessons</span>
                     <span className="gaia-muted">
-                      · {arc.approxLessons}
+                      - {arc.approxLessons}
                     </span>
                   </span>
                 </div>
@@ -497,7 +497,7 @@ export default function ClientView() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold gaia-strong">
-                Study engine · Week 7 (local persistence)
+                Study engine - Week 7 (local persistence)
               </h2>
               <p className="gaia-muted mt-1 text-xs sm:text-sm max-w-3xl">
                 This engine now remembers your simulated progress on this
@@ -571,7 +571,7 @@ export default function ClientView() {
             {todayArcInfo ? (
               <>
                 <p className="gaia-strong">
-                  {todayArcInfo.arc.label} · {todayArcInfo.arc.title}
+                  {todayArcInfo.arc.label} - {todayArcInfo.arc.title}
                 </p>
                 <p className="gaia-muted">
                   You are on day {todayArcInfo.dayIndexWithinArc} of{" "}
