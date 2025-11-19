@@ -17,6 +17,8 @@ type ReadyListener = () => void;
 type StorageListener = (detail: StorageEventDetail) => void;
 
 const STORAGE_TABLE = "user_storage";
+const hasLocal = () =>
+  typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
 let activeUserId: string | null = null;
 let activeToken: string | null = null;
@@ -377,7 +379,22 @@ async function persist(key: string, value: string | null) {
 }
 
 export function getItem(key: string): string | null {
-  return cache.get(key) ?? null;
+  if (cache.has(key)) return cache.get(key) ?? null;
+
+  // Lazy hydrate from localStorage if available (useful when not logged in / Supabase disabled)
+  if (hasLocal()) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw !== null) {
+        cache.set(key, raw);
+        return raw;
+      }
+    } catch {
+      /* ignore localStorage errors */
+    }
+  }
+
+  return null;
 }
 
 export function setItem(key: string, value: string) {
@@ -386,6 +403,13 @@ export function setItem(key: string, value: string) {
     return;
   }
   cache.set(key, value);
+  if (hasLocal()) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      /* ignore localStorage quota errors */
+    }
+  }
   emit({ key, value, previous: previousValue });
   void persist(key, value);
 }
@@ -396,6 +420,13 @@ export function removeItem(key: string) {
     return;
   }
   cache.delete(key);
+  if (hasLocal()) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      /* ignore localStorage errors */
+    }
+  }
   emit({ key, value: null, previous: previousValue });
   void persist(key, null);
 }

@@ -121,8 +121,10 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item }) => {
   const sourceLabel = item.source?.startsWith('r2') ? 'R2' : 'Local';
 
   return (
-    <div className="flex flex-col rounded-2xl border border-zinc-800/60 bg-zinc-900/60 p-3 shadow-sm backdrop-blur-sm">
-      <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-zinc-500">
+    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-zinc-800/60 bg-gradient-to-br from-zinc-950/80 via-zinc-900/70 to-emerald-950/20 p-3 shadow-lg shadow-black/30 transition duration-200 hover:-translate-y-[2px] hover:border-emerald-700/60 hover:shadow-emerald-900/30 backdrop-blur">
+      <div className="absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none bg-gradient-to-br from-emerald-500/5 via-transparent to-emerald-700/10" />
+
+      <div className="relative mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-zinc-500">
         <span>{item.type === 'image' ? 'Image' : 'Video'}</span>
         <div className="flex items-center gap-1">
           <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-[10px] text-zinc-300">
@@ -193,7 +195,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({ item }) => {
         </div>
       )}
 
-      <div className="mt-auto">
+      <div className="relative mt-auto">
         <h3 className="text-sm font-semibold text-zinc-50 line-clamp-2">{item.title}</h3>
         {item.description && (
           <p className="mt-1 text-xs text-zinc-400 line-clamp-3">{item.description}</p>
