@@ -36,7 +36,7 @@ interface CheckinsResponse {
   error?: string;
 }
 
-// GAIA Guardian · TodayCard (Week 9)
+// GAIA Guardian · TodayCard (4.0)
 //
 // Small dashboard-friendly card that shows a compact view of today's
 // Brain status. It is meant to be dropped into your existing Dashboard

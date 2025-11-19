@@ -136,6 +136,12 @@ export function useTodoDaily() {
   const tasks = useMemo(() => storage.tasks.slice(), [storage.tasks]);
   const autoAdvanceRef = useRef<string | null>(null);
 
+  const advanceToNextDay = useCallback(() => {
+    const nextDay = shiftDate(today, 1);
+    setToday(nextDay);
+    setSelection(loadSelection(nextDay));
+  }, [today]);
+
   useEffect(() => {
     let cancelled = false;
     async function hydrateFromUserStorage() {
@@ -454,10 +460,11 @@ export function useTodoDaily() {
     if (!hasCompleted) return;
     if (autoAdvanceRef.current === today) return;
     autoAdvanceRef.current = today;
-    const nextDay = shiftDate(today, 1);
-    setToday(nextDay);
-    setSelection(loadSelection(nextDay));
-  }, [slotInfo, today, setSelection, setToday]);
+    const timer = setTimeout(() => {
+      advanceToNextDay();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [slotInfo, today, advanceToNextDay]);
 
   return {
     today,
@@ -472,5 +479,6 @@ export function useTodoDaily() {
     deleteTask,
     editTask,
     setTaskStatus,
+    advanceToNextDay,
   };
 }

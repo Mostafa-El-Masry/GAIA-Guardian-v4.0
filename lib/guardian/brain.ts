@@ -1,4 +1,4 @@
-import { GaiaBrainRunResult } from './types';
+import type { GuardianBrainRunResult } from './types';
 import { guardianSupabase } from './db';
 import { ensureDailyCheckins } from './checkins';
 
@@ -10,7 +10,7 @@ import { ensureDailyCheckins } from './checkins';
 //   - guardian_daily_runs
 //   - guardian_checkins
 
-export async function runDailyBrain(targetDate: Date): Promise<GaiaBrainRunResult> {
+export async function runDailyBrain(targetDate: Date): Promise<GuardianBrainRunResult> {
   const ranAt = new Date();
   const targetIso = targetDate.toISOString();
   const runDate = targetIso.slice(0, 10); // "YYYY-MM-DD"
@@ -22,7 +22,8 @@ export async function runDailyBrain(targetDate: Date): Promise<GaiaBrainRunResul
 
   // 1) Log the Brain run itself (guardian_daily_runs)
   try {
-    const { error } = await guardianSupabase
+    const client = guardianSupabase();
+    const { error } = await client
       .from('guardian_daily_runs')
       .insert({
         user_id: null,          // multi-user will fill this later

@@ -56,10 +56,9 @@ export default function TodoSlot(props: Props) {
   } = props;
   const [showAdd, setShowAdd] = useState(false);
   const catStyle = useMemo(() => styleForCategory(category), [category]);
-  const dueLabel = task?.due_date ?? "Unscheduled";
+  const dueLabel = formatShortDate(task?.due_date);
   const relativeLabel = describeRelativeDay(task?.due_date, today);
-  const actionBtn =
-    "flex-1 rounded-lg border border-[var(--gaia-border)] bg-[var(--gaia-contrast-bg)] px-3 py-2 font-semibold text-[var(--gaia-contrast-text)] transition-opacity hover:opacity-90";
+  const actionBtn = "btn btn-circle btn-sm sm:btn-md";
 
   return (
     <div
@@ -87,36 +86,37 @@ export default function TodoSlot(props: Props) {
               {task.title}
             </div>
 
-            {task.due_date && (
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-md bg-[var(--gaia-border)] px-2 py-1 text-sm text-[var(--gaia-text-default)]">
-                  <Calendar size={16} /> {task.due_date}
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-md bg-[var(--gaia-border)] px-2 py-1 text-sm text-[var(--gaia-text-default)]">
+                <Calendar size={16} /> {dueLabel}
+              </span>
+            </div>
           </div>
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-around gap-4">
               <button
-                className={actionBtn}
+                className={`group ${actionBtn} border-error text-error hover:bg-error hover:text-white transition-all`}
                 onClick={() => onDelete(task.id)}
                 title="Delete task"
               >
-                <Trash2 size={18} />
+                <span className="relative block h-5 w-5 text-current">
+                  <span className="absolute inset-x-0 top-0 h-[3px] rounded bg-current transition-transform duration-200 origin-left group-hover:-rotate-12 group-hover:-translate-y-0.5" />
+                  <span className="absolute inset-x-1 top-1 h-3 rounded-b bg-current opacity-80 transition-transform duration-200 group-hover:scale-105" />
+                </span>
               </button>
               <button
-                className={actionBtn}
+                className={`group ${actionBtn} border-warning text-warning hover:bg-warning hover:text-black transition-all`}
                 onClick={() => onSkip(category)}
                 title="Skip this task"
               >
-                <SkipForward size={18} className="mx-auto" />
+                <SkipForward size={18} className="transition-transform group-hover:scale-110 group-hover:text-black" />
               </button>
               <button
-                className={actionBtn}
+                className={`group ${actionBtn} border-success text-success hover:bg-success/20 hover:text-success transition-all`}
                 onClick={() => onDone(category)}
                 title="Mark as done"
               >
-                <Check size={18} className="mx-auto" />
+                <Check size={18} className="transition-transform group-hover:scale-110 group-hover:text-success" />
               </button>
             </div>
           </div>
@@ -182,6 +182,21 @@ function describeRelativeDay(dateStr: string | null | undefined, todayStr: strin
   if (diff <= -2 && diff >= -6) return `${Math.abs(diff)} days ago`;
   if (diff <= -7 && diff >= -13) return "Last week";
   return target;
+}
+
+function formatShortDate(dateStr?: string | null) {
+  if (!dateStr) return "Unscheduled";
+  try {
+    const date = new Date(dateStr + "T00:00:00Z");
+    if (Number.isNaN(date.getTime())) return dateStr;
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(date);
+  } catch {
+    return dateStr;
+  }
 }
 
 function categoryIcon(c: Category) {

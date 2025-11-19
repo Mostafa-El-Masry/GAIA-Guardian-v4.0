@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { guardianSupabase } from '@/lib/guardian/db';
-import type { GuardianDailyRunRecord } from '@/lib/guardian/types';
+import type { GuardianDailyRun } from '@/lib/guardian/types';
 
 // GAIA Guardian · Brain history API
 // Week 4: fetch recent guardian_daily_runs for debug / future dashboard.
 
 export async function GET() {
   try {
-    const { data, error } = await guardianSupabase
+    const client = guardianSupabase();
+    const { data, error } = await client
       .from('guardian_daily_runs')
       .select('*')
       .order('run_date', { ascending: false })
@@ -16,21 +17,21 @@ export async function GET() {
 
     if (error) {
       return NextResponse.json(
-        { ok: false, error: error.message, runs: [] as GuardianDailyRunRecord[] },
+        { ok: false, error: error.message, runs: [] as GuardianDailyRun[] },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       ok: true,
-      runs: (data ?? []) as GuardianDailyRunRecord[],
+      runs: (data ?? []) as GuardianDailyRun[],
     });
   } catch (err: any) {
     return NextResponse.json(
       {
         ok: false,
         error: String(err?.message ?? err),
-        runs: [] as GuardianDailyRunRecord[],
+        runs: [] as GuardianDailyRun[],
       },
       { status: 500 }
     );

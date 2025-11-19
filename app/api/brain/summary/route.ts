@@ -5,7 +5,7 @@ function toDateOnlyIso(d: Date): string {
   return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
 
-// GAIA Guardian · Day summary API (Week 8)
+// GAIA Guardian · Day summary API (4.0)
 //
 // GET /api/brain/summary
 //   ?date=YYYY-MM-DD   (optional, defaults to today)
@@ -36,6 +36,7 @@ export async function GET(request: Request) {
       summary,
     });
   } catch (err: any) {
+    console.error('[Guardian] summary: exception', err);
     return NextResponse.json(
       {
         ok: false,

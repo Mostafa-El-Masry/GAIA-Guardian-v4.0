@@ -33,7 +33,7 @@ interface Props {
   disabled?: boolean;
 }
 
-// GAIA Guardian · Nudge client (Week 10)
+// GAIA Guardian · Nudge client (4.0)
 //
 // Small client component that can be placed on the Dashboard to gently
 // nudge you in the evening if today's Guardian questions are still pending.

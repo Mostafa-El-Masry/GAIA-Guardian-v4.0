@@ -24,7 +24,8 @@ const CHECKIN_QUESTIONS: Record<GuardianCheckinType, string> = {
 export async function ensureDailyCheckins(runDate: string, notes: string[]): Promise<void> {
   // runDate is 'YYYY-MM-DD'
   try {
-    const { data, error } = await guardianSupabase
+    const client = guardianSupabase();
+    const { data, error } = await client
       .from('guardian_checkins')
       .select('*')
       .eq('checkin_date', runDate)
@@ -54,7 +55,7 @@ export async function ensureDailyCheckins(runDate: string, notes: string[]): Pro
       answer_json: null,
     }));
 
-    const { error: insertError } = await guardianSupabase
+    const { error: insertError } = await client
       .from('guardian_checkins')
       .insert(rowsToInsert);
 

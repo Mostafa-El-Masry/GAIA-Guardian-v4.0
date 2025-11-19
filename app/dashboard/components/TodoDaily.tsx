@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTodoDaily } from "../hooks/useTodoDaily";
 import {
   snapshotStorage,
@@ -22,6 +22,7 @@ export default function TodoDaily() {
     skipTask,
     deleteTask,
     editTask,
+    advanceToNextDay,
   } = useTodoDaily();
 
   useEffect(() => {
@@ -55,6 +56,13 @@ export default function TodoDaily() {
 
   const [quickCategory, setQuickCategory] = useState<Category>("life");
   const [quickTitle, setQuickTitle] = useState("");
+  const allDone = useMemo(
+    () =>
+      (["life", "work", "distraction"] as Category[]).every(
+        (cat) => slotInfo[cat]?.state === "done"
+      ),
+    [slotInfo]
+  );
 
   return (
     <section className="rounded-2xl border border-[var(--gaia-border)] bg-[var(--gaia-surface-soft)] p-6 shadow-lg">
@@ -71,6 +79,14 @@ export default function TodoDaily() {
           <span className="inline-block rounded-lg bg-[var(--gaia-contrast-bg)] px-3 py-1 text-sm font-semibold text-[var(--gaia-contrast-text)]">
             Today's Focus
           </span>
+          {allDone && (
+            <button
+              className="rounded-full border border-[var(--gaia-border)] px-3 py-1 text-xs font-semibold text-[var(--gaia-text-default)] transition-colors hover:bg-[var(--gaia-border)]/40"
+              onClick={advanceToNextDay}
+            >
+              Next day →
+            </button>
+          )}
           <Link
             href="/TODO"
             className="text-sm font-semibold text-[var(--gaia-link)] hover:underline"
@@ -154,4 +170,19 @@ export default function TodoDaily() {
       </div>
     </section>
   );
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value) return "";
+  try {
+    const date = new Date(value + "T00:00:00Z");
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(date);
+  } catch {
+    return value;
+  }
 }

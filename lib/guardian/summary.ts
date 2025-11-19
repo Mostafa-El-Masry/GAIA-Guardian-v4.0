@@ -1,11 +1,13 @@
-import { guardianSupabase } from './db';
-import type { GuardianCheckinRecord, GuardianCheckinStatus } from './types';
-
-// GAIA Guardian · Day summary helper (Week 8)
+// lib/guardian/summary.ts
+//
+// GAIA Guardian · Day summary helper (4.0 core)
 //
 // Builds a small, human-friendly summary for a single day using
 // the guardian_checkins table. This does NOT touch Dashboard/Gallery;
 // it is just a service for APIs and views like /guardian-today.
+
+import { guardianSupabase } from './db';
+import type { GuardianCheckinRecord, GuardianCheckinStatus } from './types';
 
 export interface GuardianDaySummary {
   date: string;
@@ -37,7 +39,9 @@ function makeHeadline(summary: Omit<GuardianDaySummary, 'headline' | 'detailLine
 }
 
 export async function getGuardianDaySummary(dateIso: string): Promise<GuardianDaySummary | null> {
-  const { data, error } = await guardianSupabase
+  const supabase = guardianSupabase();
+
+  const { data, error } = await supabase
     .from('guardian_checkins')
     .select('*')
     .eq('checkin_date', dateIso)
@@ -45,6 +49,7 @@ export async function getGuardianDaySummary(dateIso: string): Promise<GuardianDa
 
   if (error) {
     // For summaries we prefer to fail silently: API can decide how to surface errors.
+    console.error('[Guardian] summary error', error);
     return null;
   }
 
@@ -94,15 +99,9 @@ export async function getGuardianDaySummary(dateIso: string): Promise<GuardianDa
   const headline = makeHeadline(base);
 
   const segments: string[] = [];
-  if (waterStatus) {
-    segments.push(`Water: ${waterStatus}`);
-  }
-  if (studyStatus) {
-    segments.push(`Study: ${studyStatus}`);
-  }
-  if (walkStatus) {
-    segments.push(`Walk: ${walkStatus}`);
-  }
+  if (waterStatus) segments.push(`Water: ${waterStatus}`);
+  if (studyStatus) segments.push(`Study: ${studyStatus}`);
+  if (walkStatus) segments.push(`Walk: ${walkStatus}`);
 
   const detailLines: string[] = [];
   detailLines.push(`Total questions: ${rows.length}`);

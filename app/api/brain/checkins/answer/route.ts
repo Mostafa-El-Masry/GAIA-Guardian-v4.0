@@ -1,54 +1,66 @@
 import { NextResponse } from 'next/server';
 import { guardianSupabase } from '@/lib/guardian/db';
-import type { GuardianCheckinAnswerPayload } from '@/lib/guardian/types';
+import type { GuardianCheckinStatus } from '@/lib/guardian/types';
 
-// GAIA Guardian · Brain check-ins answer API
-// Week 6: allow updating status + answer_json for a single check-in.
+// GAIA Guardian · Answer check-in API (4.0)
 //
 // POST /api/brain/checkins/answer
-//   body: { id: string, status: 'answered' | 'skipped', answer?: any }
+//
+// Body:
+//   {
+//     "id": "checkin-id",
+//     "status": "answered" | "skipped",
+//     "answer": { ...optional json ... }
+//   }
 
 export async function POST(request: Request) {
+  const supabase = guardianSupabase();
+
   try {
-    const body = (await request.json()) as GuardianCheckinAnswerPayload | null;
+    const body = await request.json();
+    const id = body?.id as string | undefined;
+    const status = body?.status as GuardianCheckinStatus | undefined;
+    const answer = body?.answer as any | undefined;
 
-    if (!body || !body.id || !body.status) {
+    if (!id || !status) {
       return NextResponse.json(
-        { ok: false, error: 'Missing id or status in request body.' },
+        { ok: false, error: 'Missing id or status.' },
+        { status: 400 }
+      );
+    }
+    if (status !== 'answered' && status !== 'skipped') {
+      return NextResponse.json(
+        { ok: false, error: 'Status must be answered or skipped.' },
         { status: 400 }
       );
     }
 
-    if (!['answered', 'skipped'].includes(body.status)) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid status. Must be "answered" or "skipped".' },
-        { status: 400 }
-      );
-    }
-
-    const updatePayload: Record<string, any> = {
-      status: body.status,
+    const update: any = {
+      status,
       updated_at: new Date().toISOString(),
     };
-
-    if (typeof body.answer !== 'undefined') {
-      updatePayload.answer_json = body.answer;
+    if (typeof answer !== 'undefined') {
+      update.answer_json = answer;
     }
 
-    const { error } = await guardianSupabase
+    const { data, error } = await supabase
       .from('guardian_checkins')
-      .update(updatePayload)
-      .eq('id', body.id);
+      .update(update)
+      .eq('id', id)
+      .select('*')
+      .limit(1);
 
     if (error) {
+      console.error('[Guardian] answer: error', error);
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { ok: false, error: 'Failed to update check-in.' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, checkin: data && data[0] });
   } catch (err: any) {
+    console.error('[Guardian] answer: exception', err);
     return NextResponse.json(
       { ok: false, error: String(err?.message ?? err) },
       { status: 500 }

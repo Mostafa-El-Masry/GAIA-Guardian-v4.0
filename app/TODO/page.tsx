@@ -32,6 +32,21 @@ const EMPTY_DRAFTS: Record<Category, string> = {
   distraction: "",
 };
 
+function formatShortDate(value?: string | null) {
+  if (!value || value === "Unscheduled") return value ?? "Unscheduled";
+  try {
+    const date = new Date(value + "T00:00:00Z");
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(date);
+  } catch {
+    return value;
+  }
+}
+
 export default function TODOPage() {
   const { tasks, deleteTask, addQuickTask, editTask, setTaskStatus } = useTodoDaily();
   const [storageStatus, setStorageStatus] = useState({ synced: false, hasTasks: false });
@@ -153,10 +168,10 @@ export default function TODOPage() {
           </header>
 
           <div className="rounded-xl border border-base-300 bg-base-100/60">
-            {byCat[cat].length === 0 ? (
-              <div className="space-y-1 p-4 text-sm text-base-content/60">
-                <p>No tasks in this category yet.</p>
-                <p>
+                {byCat[cat].length === 0 ? (
+                  <div className="space-y-1 p-4 text-sm text-base-content/60">
+                    <p>No tasks in this category yet.</p>
+                    <p>
                   Add one below or from the dashboard&apos;s &quot;Today&apos;s Focus&quot; cards using Quick Add, and
                   they&apos;ll sync here automatically.
                 </p>
@@ -169,6 +184,7 @@ export default function TODOPage() {
                     (statusMeta.dateLabel !== "Unscheduled" && statusMeta.dateLabel) ||
                     t.due_date ||
                     null;
+                  const friendlyDue = formatShortDate(t.due_date);
 
                   return (
                     <li key={t.id} className="p-3">
@@ -185,6 +201,9 @@ export default function TODOPage() {
                           )}
 
                           <StatusRow task={t} toneStyles={toneStyles} status={statusMeta} />
+                          <p className="mt-1 text-xs text-base-content/60">
+                            Due: {friendlyDue}
+                          </p>
 
                           <div className="mt-3 flex flex-wrap gap-3 text-xs text-base-content/70">
                             <label className="flex items-center gap-2 rounded-lg border border-base-300 bg-base-50 px-3 py-2 text-xs font-medium">
@@ -278,11 +297,11 @@ function StatusRow({ task, toneStyles, status }: StatusRowProps) {
         Status: {status.label}
       </span>
       <span className="inline-flex items-center gap-1 rounded-full border border-base-300/60 px-2 py-0.5 text-base-content/70">
-        Date: {status.dateLabel}
+        Date: {formatShortDate(status.dateLabel)}
       </span>
       {task.due_date && task.due_date !== status.dateLabel && (
         <span className="inline-flex items-center gap-1 rounded-full border border-base-300/60 px-2 py-0.5 text-base-content/70">
-          Due: {task.due_date}
+          Due: {formatShortDate(task.due_date)}
         </span>
       )}
     </div>

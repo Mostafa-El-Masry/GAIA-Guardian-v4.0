@@ -2,24 +2,15 @@
 
 import { useEffect, useState } from 'react';
 
-interface BrainResult {
-  ok: boolean;
-  ranAt: string;
-  targetDate: string;
-  notes: string[];
-}
-
-interface GuardianDailyRunRecord {
-  id: string;
-  user_id: string | null;
-  run_date: string;
-  ran_at: string;
-  notes: string[];
-  created_at: string;
-}
-
 type GuardianCheckinType = 'water' | 'study' | 'walk';
 type GuardianCheckinStatus = 'pending' | 'answered' | 'skipped';
+
+interface GuardianDailyRun {
+  id: string;
+  run_date: string;
+  created_at: string;
+  meta_json?: any | null;
+}
 
 interface GuardianCheckinRecord {
   id: string;
@@ -33,154 +24,120 @@ interface GuardianCheckinRecord {
   updated_at: string;
 }
 
+interface RunsResponse {
+  ok: boolean;
+  runs: GuardianDailyRun[];
+  error?: string;
+}
+
+interface RunResponse {
+  ok: boolean;
+  date: string | null;
+  run?: GuardianDailyRun;
+  created_checkins?: number;
+  checkins?: GuardianCheckinRecord[];
+  error?: string;
+}
+
+interface CheckinsResponse {
+  ok: boolean;
+  date: string | null;
+  checkins: GuardianCheckinRecord[];
+  error?: string;
+}
+
+interface AnswerResponse {
+  ok: boolean;
+  checkin?: GuardianCheckinRecord;
+  error?: string;
+}
+
 export default function GuardianDebugPage() {
-  const [result, setResult] = useState<BrainResult | null>(null);
-  const [history, setHistory] = useState<GuardianDailyRunRecord[]>([]);
-  const [checkins, setCheckins] = useState<GuardianCheckinRecord[]>([]);
-
-  const [loadingRun, setLoadingRun] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [loadingCheckins, setLoadingCheckins] = useState(false);
-  const [updatingCheckinId, setUpdatingCheckinId] = useState<string | null>(null);
-
-  const [error, setError] = useState<string | null>(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [checkinsError, setCheckinsError] = useState<string | null>(null);
+  const [runs, setRuns] = useState<GuardianDailyRun[]>([]);
+  const [runsError, setRunsError] = useState<string | null>(null);
+  const [loadingRuns, setLoadingRuns] = useState(false);
 
   const [runDate, setRunDate] = useState<string>('');
+  const [runningBrain, setRunningBrain] = useState(false);
+  const [lastRunResult, setLastRunResult] = useState<string | null>(null);
+
   const [checkinsDate, setCheckinsDate] = useState<string>('');
+  const [checkins, setCheckins] = useState<GuardianCheckinRecord[]>([]);
+  const [checkinsError, setCheckinsError] = useState<string | null>(null);
+  const [loadingCheckins, setLoadingCheckins] = useState(false);
 
-  // Local draft answers per check-in id
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
-
-  const fetchHistory = async () => {
-    setLoadingHistory(true);
-    setHistoryError(null);
-    try {
-      const res = await fetch('/api/brain/history');
-      const data = await res.json();
-      if (!data.ok) {
-        throw new Error(data.error || 'Unknown history error');
-      }
-      setHistory(data.runs ?? []);
-    } catch (err: any) {
-      setHistoryError(err?.message ?? 'Failed to load history');
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
-  const fetchCheckins = async (dateOverride?: string) => {
-    setLoadingCheckins(true);
-    setCheckinsError(null);
-    try {
-      const param = dateOverride || checkinsDate;
-      const url = param ? `/api/brain/checkins?date=${param}` : '/api/brain/checkins';
-      const res = await fetch(url);
-      const data = await res.json();
-      if (!data.ok) {
-        throw new Error(data.error || 'Unknown check-ins error');
-      }
-      setCheckins(data.checkins ?? []);
-      if (!dateOverride && !checkinsDate && data.date) {
-        setCheckinsDate(data.date);
-      }
-    } catch (err: any) {
-      setCheckinsError(err?.message ?? 'Failed to load check-ins');
-    } finally {
-      setLoadingCheckins(false);
-    }
-  };
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load history and today's check-ins on first visit
-    fetchHistory();
-    fetchCheckins();
+    refreshRuns();
   }, []);
 
-  const runBrainToday = async () => {
-    setLoadingRun(true);
-    setError(null);
+  const refreshRuns = async () => {
+    setLoadingRuns(true);
+    setRunsError(null);
     try {
-      const res = await fetch('/api/brain/run');
-      if (!res.ok) {
-        throw new Error('Request failed with status ' + res.status);
+      const res = await fetch('/api/brain/runs');
+      const data = (await res.json()) as RunsResponse;
+      if (!data.ok) {
+        throw new Error(data.error || 'Failed to load runs');
       }
-      const data = (await res.json()) as BrainResult;
-      setResult(data);
-      fetchHistory();
-      const dateOnly = data.targetDate.slice(0, 10);
-      fetchCheckins(dateOnly);
+      setRuns(data.runs ?? []);
     } catch (err: any) {
-      setError(err?.message ?? 'Unknown error');
-      setResult(null);
+      setRunsError(err?.message ?? 'Unknown error');
     } finally {
-      setLoadingRun(false);
+      setLoadingRuns(false);
     }
   };
 
-  const runBrainForDate = async () => {
-    if (!runDate) {
-      setError('Please pick a date first.');
-      return;
-    }
-    setLoadingRun(true);
-    setError(null);
+  const runBrain = async () => {
+    setRunningBrain(true);
+    setLastRunResult(null);
     try {
+      const body: any = {};
+      if (runDate) body.date = runDate;
       const res = await fetch('/api/brain/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: runDate }),
+        body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        throw new Error('Request failed with status ' + res.status);
+      const data = (await res.json()) as RunResponse;
+      if (!data.ok) {
+        throw new Error(data.error || 'Failed to run Guardian Brain');
       }
-      const data = (await res.json()) as BrainResult;
-      setResult(data);
-      fetchHistory();
-      const dateOnly = data.targetDate.slice(0, 10);
-      fetchCheckins(dateOnly);
+      setLastRunResult(
+        `Ran for ${data.date ?? 'unknown date'} · created ${data.created_checkins ?? 0} check-ins.`
+      );
+      // refresh runs + checkins for that date
+      refreshRuns();
+      if (data.date) {
+        setCheckinsDate(data.date);
+        await loadCheckins(data.date);
+      }
     } catch (err: any) {
-      setError(err?.message ?? 'Unknown error');
-      setResult(null);
+      setLastRunResult(err?.message ?? 'Unknown error while running Brain');
     } finally {
-      setLoadingRun(false);
+      setRunningBrain(false);
     }
   };
 
-  const updateCheckin = async (
-    id: string,
-    status: GuardianCheckinStatus,
-  ) => {
-    setUpdatingCheckinId(id);
+  const loadCheckins = async (date?: string) => {
+    const target = date || checkinsDate;
+    if (!target) return;
+    setLoadingCheckins(true);
     setCheckinsError(null);
     try {
-      const draft = answerDrafts[id];
-      const payload: any = { id, status };
-
-      if (typeof draft !== 'undefined' && draft !== '') {
-        // Store a generic object; later we can specialize per type
-        payload.answer = { text: draft };
-      }
-
-      const res = await fetch('/api/brain/checkins/answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
+      const res = await fetch(`/api/brain/checkins?date=${target}`);
+      const data = (await res.json()) as CheckinsResponse;
       if (!data.ok) {
-        throw new Error(data.error || 'Unknown update error');
+        throw new Error(data.error || 'Failed to load check-ins');
       }
-
-      // Refresh check-ins for the current date
-      const date = checkinsDate || (checkins[0]?.checkin_date ?? '');
-      fetchCheckins(date);
+      setCheckins(data.checkins ?? []);
     } catch (err: any) {
-      setCheckinsError(err?.message ?? 'Failed to update check-in');
+      setCheckinsError(err?.message ?? 'Unknown error while loading check-ins');
+      setCheckins([]);
     } finally {
-      setUpdatingCheckinId(null);
+      setLoadingCheckins(false);
     }
   };
 
@@ -191,134 +148,160 @@ export default function GuardianDebugPage() {
     }));
   };
 
+  const updateCheckin = async (id: string, status: GuardianCheckinStatus) => {
+    setUpdatingId(id);
+    try {
+      const draft = answerDrafts[id];
+      const payload: any = { id, status };
+      if (typeof draft !== 'undefined' && draft !== '') {
+        payload.answer = { text: draft };
+      }
+      const res = await fetch('/api/brain/checkins/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json()) as AnswerResponse;
+      if (!data.ok) {
+        throw new Error(data.error || 'Failed to update check-in');
+      }
+      // Reload check-ins
+      if (checkinsDate) {
+        await loadCheckins(checkinsDate);
+      }
+    } catch (err: any) {
+      alert(err?.message ?? 'Unknown error while saving');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const statusBadgeClasses = (status: GuardianCheckinStatus) => {
+    if (status === 'answered') {
+      return 'inline-flex items-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium';
+    }
+    if (status === 'skipped') {
+      return 'inline-flex items-center rounded-full border border-amber-500/60 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium';
+    }
+    return 'inline-flex items-center rounded-full border border-sky-500/60 bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium';
+  };
+
+  const statusLabel = (status: GuardianCheckinStatus) => {
+    if (status === 'answered') return 'Answered';
+    if (status === 'skipped') return 'Skipped';
+    return 'Pending';
+  };
+
+  const niceType = (type: GuardianCheckinType) => {
+    if (type === 'water') return 'Water';
+    if (type === 'study') return 'Study';
+    if (type === 'walk') return 'Walk';
+    return type;
+  };
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6">
-      <section className="w-full max-w-4xl space-y-8">
+    <main className="min-h-screen px-4 py-8 flex flex-col items-center">
+      <section className="w-full max-w-5xl space-y-8">
         <header className="space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight">
-            GAIA Guardian · Brain Debug
+            GAIA Guardian · Debug
           </h1>
           <p className="text-sm opacity-70">
-            Week 6 – Brain logs daily runs, creates daily check-ins, and this page lets you
-            inspect and answer those questions. Dev-only view; your main UI is still untouched.
+            Internal tools for Guardian 4.0. Use this page to run the Brain for specific dates,
+            inspect daily runs, and debug check-ins. This page is for you only and is not meant for
+            the normal Dashboard flow.
           </p>
         </header>
 
-        {/* Controls */}
-        <section className="space-y-4 rounded-md border bg-black/5 p-4">
-          <h2 className="text-sm font-semibold">Run Brain</h2>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={runBrainToday}
-              disabled={loadingRun}
-              className="inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
-            >
-              {loadingRun ? 'Running…' : 'Run for today'}
-            </button>
-
-            <div className="flex items-center gap-2 text-sm">
-              <label className="text-xs opacity-80" htmlFor="run-date">
-                or pick date
-              </label>
+        {/* Brain run controls */}
+        <section className="rounded-md border bg-black/5 p-4 space-y-4">
+          <h2 className="text-sm font-semibold">Run Brain for a date</h2>
+          <p className="text-xs opacity-70">
+            Choose a date (or leave empty for today) and click &quot;Run Brain&quot; to create daily
+            questions (water, study, walk). Running again for the same date will not duplicate
+            questions.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <label className="opacity-70">Date</label>
               <input
-                id="run-date"
                 type="date"
                 value={runDate}
                 onChange={(e) => setRunDate(e.target.value)}
-                className="rounded-md border bg-black/5 px-2 py-1 text-xs"
+                className="rounded-md border bg-black/5 px-2 py-1"
               />
-              <button
-                type="button"
-                onClick={runBrainForDate}
-                disabled={loadingRun}
-                className="inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
-              >
-                Run for chosen date
-              </button>
             </div>
-
-            {error && <p className="text-xs text-red-600">Error: {error}</p>}
-          </div>
-
-          <div className="rounded-md border bg-black/5 p-3 text-xs overflow-x-auto">
-            {result ? (
-              <pre className="whitespace-pre-wrap break-all">
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            ) : (
-              <span className="opacity-60">
-                No runs yet in this session. Use the buttons above to trigger the Brain.
-              </span>
+            <button
+              type="button"
+              onClick={runBrain}
+              disabled={runningBrain}
+              className="inline-flex items-center justify-center rounded-md border px-2.5 py-1 font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
+            >
+              {runningBrain ? 'Running…' : 'Run Brain'}
+            </button>
+            {lastRunResult && (
+              <p className="text-xs opacity-80">
+                {lastRunResult}
+              </p>
             )}
           </div>
         </section>
 
-        {/* History */}
-        <section className="space-y-3 rounded-md border bg-black/5 p-4">
+        {/* Runs history */}
+        <section className="rounded-md border bg-black/5 p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold">Recent Brain Runs</h2>
+            <h2 className="text-sm font-semibold">Daily runs history</h2>
             <button
               type="button"
-              onClick={fetchHistory}
-              disabled={loadingHistory}
+              onClick={refreshRuns}
+              disabled={loadingRuns}
               className="inline-flex items-center justify-center rounded-md border px-2.5 py-1 text-xs font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
             >
-              {loadingHistory ? 'Refreshing…' : 'Refresh'}
+              {loadingRuns ? 'Refreshing…' : 'Refresh'}
             </button>
           </div>
-
-          {historyError && (
-            <p className="text-xs text-red-600">History error: {historyError}</p>
-          )}
-
-          {history.length === 0 ? (
-            <p className="text-xs opacity-60">
-              No Brain runs found in the guardian_daily_runs table yet.
+          {runsError && (
+            <p className="text-xs text-red-500">
+              {runsError}
             </p>
-          ) : (
-            <div className="max-h-64 overflow-auto rounded-md border bg-black/5">
-              <table className="w-full border-collapse text-xs">
-                <thead className="bg-black/10">
+          )}
+          {runs.length === 0 && !runsError && (
+            <p className="text-xs opacity-70">
+              No Guardian runs recorded yet.
+            </p>
+          )}
+          {runs.length > 0 && (
+            <div className="max-h-64 overflow-auto rounded-md border bg-black/10">
+              <table className="w-full text-[11px]">
+                <thead className="bg-black/20">
                   <tr>
-                    <th className="border px-2 py-1 text-left">Date</th>
-                    <th className="border px-2 py-1 text-left">Ran at</th>
-                    <th className="border px-2 py-1 text-left">Notes</th>
+                    <th className="px-2 py-1 text-left font-medium">Date</th>
+                    <th className="px-2 py-1 text-left font-medium">Created at</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {history.map((run) => (
-                    <tr key={run.id} className="align-top">
-                      <td className="border px-2 py-1 whitespace-nowrap">
-                        {run.run_date}
-                      </td>
-                      <td className="border px-2 py-1 whitespace-nowrap">
-                        {new Date(run.ran_at).toLocaleString()}
-                      </td>
-                      <td className="border px-2 py-1">
-                        <ul className="list-disc pl-4 space-y-0.5">
-                          {run.notes?.map((note, idx) => (
-                            <li key={idx}>{note}</li>
-                          ))}
-                        </ul>
-                      </td>
+                  {runs.map((r) => (
+                    <tr key={r.id} className="border-t border-white/5">
+                      <td className="px-2 py-1">{r.run_date}</td>
+                      <td className="px-2 py-1 opacity-70">{r.created_at}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
-
-          <p className="text-[11px] opacity-60">
-            This history is limited to the last 30 runs for now. Later, parts of this view can
-            move into your main Dashboard as a small "Brain activity" card.
-          </p>
         </section>
 
-        {/* Check-ins */}
-        <section className="space-y-3 rounded-md border bg-black/5 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold">Daily Check-ins (debug)</h2>
+        {/* Check-ins for a date */}
+        <section className="rounded-md border bg-black/5 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold">Check-ins for a date</h2>
+              <p className="text-xs opacity-70">
+                Load the check-ins for a specific day. You can also answer or skip them from here
+                while debugging.
+              </p>
+            </div>
             <div className="flex items-center gap-2 text-xs">
               <input
                 type="date"
@@ -328,90 +311,98 @@ export default function GuardianDebugPage() {
               />
               <button
                 type="button"
-                onClick={() => fetchCheckins()}
-                disabled={loadingCheckins}
+                onClick={() => loadCheckins()}
+                disabled={loadingCheckins || !checkinsDate}
                 className="inline-flex items-center justify-center rounded-md border px-2.5 py-1 font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
               >
-                {loadingCheckins ? 'Loading…' : 'Load check-ins'}
+                {loadingCheckins ? 'Loading…' : 'Load'}
               </button>
             </div>
           </div>
 
           {checkinsError && (
-            <p className="text-xs text-red-600">Check-ins error: {checkinsError}</p>
+            <p className="text-xs text-red-500">
+              {checkinsError}
+            </p>
           )}
 
-          {checkins.length === 0 ? (
-            <p className="text-xs opacity-60">
-              No check-ins found for the selected date yet. Try running the Brain for that date
-              above.
+          {checkins.length === 0 && !loadingCheckins && !checkinsError && checkinsDate && (
+            <p className="text-xs opacity-70">
+              No check-ins found for this date. Try running the Brain for this day above.
             </p>
-          ) : (
-            <div className="max-h-72 overflow-auto rounded-md border bg-black/5">
-              <table className="w-full border-collapse text-xs">
-                <thead className="bg-black/10">
-                  <tr>
-                    <th className="border px-2 py-1 text-left">Type</th>
-                    <th className="border px-2 py-1 text-left">Status</th>
-                    <th className="border px-2 py-1 text-left">Question</th>
-                    <th className="border px-2 py-1 text-left">Answer</th>
-                    <th className="border px-2 py-1 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {checkins.map((c) => (
-                    <tr key={c.id} className="align-top">
-                      <td className="border px-2 py-1 whitespace-nowrap">{c.type}</td>
-                      <td className="border px-2 py-1 whitespace-nowrap">{c.status}</td>
-                      <td className="border px-2 py-1">{c.question}</td>
-                      <td className="border px-2 py-1">
-                        <div className="space-y-1">
-                          <input
-                            type="text"
-                            value={answerDrafts[c.id] ?? ''}
-                            onChange={(e) => handleDraftChange(c.id, e.target.value)}
-                            placeholder="Type answer (optional)"
-                            className="w-full rounded-md border bg-black/5 px-2 py-1 text-[11px]"
-                          />
-                          <pre className="whitespace-pre-wrap break-all opacity-70 text-[11px]">
-                            {c.answer_json == null
-                              ? '(no stored answer yet)'
-                              : JSON.stringify(c.answer_json, null, 2)}
-                          </pre>
-                        </div>
-                      </td>
-                      <td className="border px-2 py-1 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <button
-                            type="button"
-                            onClick={() => updateCheckin(c.id, 'answered')}
-                            disabled={updatingCheckinId === c.id}
-                            className="rounded-md border px-2 py-0.5 text-[11px] font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
-                          >
-                            {updatingCheckinId === c.id ? 'Saving…' : 'Mark answered'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateCheckin(c.id, 'skipped')}
-                            disabled={updatingCheckinId === c.id}
-                            className="rounded-md border px-2 py-0.5 text-[11px] font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
-                          >
-                            Skip
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          )}
+
+          {checkins.length > 0 && (
+            <div className="space-y-3">
+              {checkins.map((c) => (
+                <article
+                  key={c.id}
+                  className="rounded-md border bg-black/10 px-3 py-3 flex flex-col gap-2 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide opacity-60">
+                        {niceType(c.type)}
+                      </p>
+                      <p className="text-sm font-medium">
+                        {c.question}
+                      </p>
+                    </div>
+                    <span className={statusBadgeClasses(c.status)}>
+                      {statusLabel(c.status)}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[11px] opacity-70">
+                      Answer draft (for testing)
+                    </label>
+                    <input
+                      type="text"
+                      value={answerDrafts[c.id] ?? ''}
+                      onChange={(e) => handleDraftChange(c.id, e.target.value)}
+                      placeholder={
+                        c.type === 'water'
+                          ? 'e.g. 1500 ml'
+                          : c.type === 'walk'
+                          ? 'e.g. 20 minutes'
+                          : 'e.g. 45 minutes of study'
+                      }
+                      className="w-full rounded-md border bg-black/5 px-2 py-1 text-[11px]"
+                    />
+                    <p className="text-[11px] opacity-70">
+                      Stored answer:{' '}
+                      {c.answer_json == null
+                        ? <span className="italic">(none yet)</span>
+                        : <code className="break-all">
+                            {JSON.stringify(c.answer_json)}
+                          </code>}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => updateCheckin(c.id, 'answered')}
+                      disabled={updatingId === c.id}
+                      className="inline-flex items-center justify-center rounded-md border px-2.5 py-1 font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
+                    >
+                      {updatingId === c.id ? 'Saving…' : 'Mark answered'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateCheckin(c.id, 'skipped')}
+                      disabled={updatingId === c.id}
+                      className="inline-flex items-center justify-center rounded-md border px-2.5 py-1 font-medium shadow-sm hover:bg-black/5 disabled:opacity-60"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                  <p className="text-[11px] opacity-60">
+                    id: <code>{c.id}</code>
+                  </p>
+                </article>
+              ))}
             </div>
           )}
-
-          <p className="text-[11px] opacity-60">
-            Later, these check-ins (types + status + answers) will feed directly into your main
-            Dashboard&apos;s end-of-day prompts and summaries. For now, this page is your lab for
-            shaping that behavior without risking the real UI.
-          </p>
         </section>
       </section>
     </main>
